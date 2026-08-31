@@ -10,7 +10,7 @@ Next.js 15 (App Router) · TypeScript · Tailwind · Drizzle ORM · PostgreSQL (
 ```bash
 npm install
 cp .env.example .env
-# preencher DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BETTER_AUTH_SECRET
+# preencher DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BETTER_AUTH_SECRET e BETTER_AUTH_URL
 ```
 
 1. Criar projeto no Supabase.

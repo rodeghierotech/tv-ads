@@ -3,7 +3,8 @@
 import { db } from "@/db";
 import { tv } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { generatePairingCode, HEARTBEAT_TIMEOUT_MS } from "@/lib/pairing";
+import { generatePairingCode } from "@/lib/pairing";
+import { computeTvStatus } from "@/lib/tv-status";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -47,12 +48,6 @@ export async function pairTvByCode(code: string, name: string, location?: string
   await db.update(tv).set({ paired: true, name, location }).where(eq(tv.id, found.id));
   revalidatePath("/tvs");
   return found;
-}
-
-// Calcula status real (online/offline) com base no último heartbeat
-export function computeTvStatus(lastHeartbeat: Date | null): "online" | "offline" {
-  if (!lastHeartbeat) return "offline";
-  return Date.now() - lastHeartbeat.getTime() < HEARTBEAT_TIMEOUT_MS ? "online" : "offline";
 }
 
 export async function listTvsWithStatus() {

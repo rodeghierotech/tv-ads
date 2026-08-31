@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { LayoutDashboard, Tv, ImageIcon, ListVideo, Settings, LogOut } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 const nav = [
   { section: "Principal", items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
   {

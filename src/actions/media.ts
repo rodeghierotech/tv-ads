@@ -24,7 +24,7 @@ export async function uploadMedia(formData: FormData) {
     : null;
   if (!type) throw new Error("Formato de arquivo não suportado");
 
-  const ext = file.name.split(".").pop();
+  const ext = file.name.split(".").pop() ?? "bin";
   const path = `${type}s/${randomUUID()}.${ext}`;
   const url = await uploadMediaFile(file, path);
 
@@ -43,7 +43,10 @@ export async function uploadMedia(formData: FormData) {
 }
 
 export async function deleteMedia(id: string, storagePath: string) {
-  await deleteMediaFile(storagePath);
+  if (storagePath) {
+    await deleteMediaFile(storagePath);
+  }
+
   await db.delete(media).where(eq(media.id, id));
   revalidatePath("/conteudos");
 }
