@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import { media } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { uploadMediaFile, deleteMediaFile } from "@/lib/supabase";
+import { deleteMediaFile, uploadMediaFile } from "@/lib/media-storage";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 

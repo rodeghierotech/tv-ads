@@ -12,12 +12,12 @@ export function CreatePlaylistDialog() {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="bg-white text-black px-4 py-2 rounded-md text-sm font-medium">
+      <button onClick={() => setOpen(true)} className="w-full bg-white px-4 py-2.5 rounded-xl text-sm font-medium text-black sm:w-auto">
         + Nova playlist
       </button>
       {open && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 w-full max-w-sm">
+          <div onClick={(e) => e.stopPropagation()} className="mx-3 w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6">
             <h2 className="text-lg font-semibold mb-4">Nova playlist</h2>
             <form
               action={(formData) => {
@@ -34,9 +34,9 @@ export function CreatePlaylistDialog() {
                 name="name"
                 required
                 placeholder="Ex: Promoções Agosto"
-                className="w-full bg-zinc-950 border border-zinc-700 rounded-md px-3 py-2 text-sm"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm"
               />
-              <button type="submit" disabled={pending} className="w-full bg-white text-black py-2 rounded-md text-sm font-medium disabled:opacity-50">
+              <button type="submit" disabled={pending} className="w-full bg-white text-black py-3 rounded-xl text-sm font-medium disabled:opacity-50">
                 {pending ? "Criando..." : "Criar"}
               </button>
             </form>

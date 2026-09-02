@@ -1,10 +1,12 @@
 /**
  * Cria o usuário administrador inicial.
- * Uso: npx tsx scripts/create-admin.ts admin@empresa.com senha123
+ * Uso: npx tsx scripts/create-admin.ts admin@empresa.com "troque-por-uma-senha-forte"
  */
-import { auth } from "../src/lib/auth";
+
+process.loadEnvFile(".env");
 
 async function main() {
+  const { auth } = await import("../src/lib/auth");
   const [, , email, password] = process.argv;
   if (!email || !password) {
     console.error("Uso: npx tsx scripts/create-admin.ts <email> <senha>");

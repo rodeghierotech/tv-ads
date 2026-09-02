@@ -16,18 +16,12 @@ const tvSchema = z.object({
 export async function createTv(input: z.infer<typeof tvSchema>) {
   const data = tvSchema.parse(input);
   let code = generatePairingCode();
-  // garante unicidade
   while (await db.query.tv.findFirst({ where: eq(tv.pairingCode, code) })) {
     code = generatePairingCode();
   }
   const [created] = await db.insert(tv).values({ ...data, pairingCode: code }).returning();
   revalidatePath("/tvs");
   return created;
-}
-
-export async function updateTv(id: string, input: Partial<z.infer<typeof tvSchema>>) {
-  await db.update(tv).set(input).where(eq(tv.id, id));
-  revalidatePath("/tvs");
 }
 
 export async function deleteTv(id: string) {

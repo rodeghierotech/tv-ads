@@ -28,7 +28,6 @@ export default function PlayerPage() {
   const versionRef = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 1. Garante identidade do dispositivo (gera código se necessário)
   useEffect(() => {
     const stored = localStorage.getItem(DEVICE_KEY);
     if (stored) {
@@ -44,7 +43,6 @@ export default function PlayerPage() {
     }
   }, []);
 
-  // 2. Enquanto não pareado, verifica periodicamente se o admin já vinculou
   useEffect(() => {
     if (!tvId || paired) return;
     const check = () =>
@@ -59,7 +57,6 @@ export default function PlayerPage() {
     return () => clearInterval(interval);
   }, [tvId, paired]);
 
-  // 3. Sincronização periódica da playlist (por versão) + heartbeat
   const syncConfig = useCallback(() => {
     if (!tvId) return;
     fetch(`/api/player/config?tvId=${tvId}`)
@@ -99,7 +96,6 @@ export default function PlayerPage() {
     return () => clearInterval(interval);
   }, [tvId, paired]);
 
-  // 4. Avanço automático da reprodução (imagens por duração; vídeo trata via onEnded)
   const currentItem = playlist?.items?.[index] ?? null;
 
   const advance = useCallback(() => {
@@ -117,7 +113,6 @@ export default function PlayerPage() {
     };
   }, [currentItem, advance]);
 
-  // ---------- Telas ----------
   if (!tvId || (!paired && !code)) {
     return <FullscreenMessage title="Iniciando..." />;
   }
@@ -125,8 +120,10 @@ export default function PlayerPage() {
   if (!paired) {
     return (
       <FullscreenMessage title="Este dispositivo ainda não está conectado">
-        <p className="text-zinc-400 mb-4">Digite este código no painel administrativo para conectar esta TV.</p>
-        <div className="text-6xl font-mono font-bold tracking-widest text-white">{code}</div>
+        <p className="mb-5 max-w-md text-sm text-zinc-400">Digite este código no painel administrativo para conectar esta TV.</p>
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-4xl font-mono font-bold tracking-[0.35em] text-white sm:text-5xl">
+          {code}
+        </div>
       </FullscreenMessage>
     );
   }
@@ -136,34 +133,40 @@ export default function PlayerPage() {
   }
 
   return (
-    <div className="fixed inset-0 bg-black overflow-hidden">
-      {currentItem && currentItem.media.type === "image" ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={currentItem.id}
-          src={currentItem.media.url}
-          alt={currentItem.media.name}
-          className="w-full h-full object-contain"
-        />
-      ) : currentItem ? (
-        <video
-          key={currentItem.id}
-          src={currentItem.media.url}
-          className="w-full h-full object-contain"
-          autoPlay
-          muted
-          onEnded={advance}
-        />
-      ) : null}
+    <div className="fixed inset-0 overflow-hidden bg-[#020617]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(24,24,27,0.32),rgba(2,6,23,0.88)_62%)]" />
+      <div className="relative h-full w-full">
+        {currentItem && currentItem.media.type === "image" ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={currentItem.id}
+            src={currentItem.media.url}
+            alt={currentItem.media.name}
+            className="h-full w-full object-contain"
+          />
+        ) : currentItem ? (
+          <video
+            key={currentItem.id}
+            src={currentItem.media.url}
+            className="h-full w-full object-contain"
+            autoPlay
+            muted
+            onEnded={advance}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
 
 function FullscreenMessage({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 bg-black text-white flex flex-col items-center justify-center text-center p-8">
-      <h1 className="text-3xl font-semibold mb-4">{title}</h1>
-      {children}
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#050816] px-6 py-10 text-center text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(30,41,59,0.35),rgba(2,6,23,0.9)_58%)]" />
+      <div className="relative space-y-4">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
+        {children}
+      </div>
     </div>
   );
 }

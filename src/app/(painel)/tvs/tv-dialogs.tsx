@@ -10,7 +10,7 @@ export function CreateTvDialog() {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="bg-white text-black px-4 py-2 rounded-md text-sm font-medium">
+      <button onClick={() => setOpen(true)} className="w-full bg-white px-4 py-2.5 rounded-xl text-sm font-medium text-black sm:w-auto">
         + Adicionar TV
       </button>
       {open && (
@@ -48,7 +48,7 @@ export function PairTvDialog() {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="border border-zinc-700 px-4 py-2 rounded-md text-sm font-medium">
+      <button onClick={() => setOpen(true)} className="w-full border border-zinc-700 px-4 py-2.5 rounded-xl text-sm font-medium sm:w-auto">
         Conectar dispositivo
       </button>
       {open && (
@@ -97,7 +97,7 @@ export function AssignPlaylistSelect({
       defaultValue={currentPlaylistId ?? ""}
       disabled={pending}
       onChange={(e) => start(() => setTvPlaylist(tvId, e.target.value || null))}
-      className="bg-zinc-900 border border-zinc-700 rounded-md text-sm px-2 py-1"
+      className="w-full min-w-0 bg-zinc-900 border border-zinc-700 rounded-md text-sm px-2 py-2.5 sm:w-auto"
     >
       <option value="">Sem playlist</option>
       {playlists.map((p) => (
@@ -129,7 +129,7 @@ function Modal({ children, onClose, title }: { children: React.ReactNode; onClos
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 w-full max-w-sm"
+        className="mx-3 w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6"
       >
         <h2 className="text-lg font-semibold mb-4">{title}</h2>
         {children}
@@ -146,7 +146,7 @@ function Field({ label, name, required, placeholder }: { label: string; name: st
         name={name}
         required={required}
         placeholder={placeholder}
-        className="w-full bg-zinc-950 border border-zinc-700 rounded-md px-3 py-2 text-sm"
+        className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm"
       />
     </div>
   );
@@ -157,7 +157,7 @@ function SubmitButton({ pending, label }: { pending: boolean; label: string }) {
     <button
       type="submit"
       disabled={pending}
-      className="w-full bg-white text-black py-2 rounded-md text-sm font-medium disabled:opacity-50"
+      className="w-full bg-white text-black py-3 rounded-xl text-sm font-medium disabled:opacity-50"
     >
       {pending ? "Salvando..." : label}
     </button>

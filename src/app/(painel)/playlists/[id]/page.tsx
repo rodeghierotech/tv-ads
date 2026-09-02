@@ -14,11 +14,11 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
   const availableMedia = allMedia.filter((m) => !usedIds.has(m.id));
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto w-full max-w-4xl space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">{playlist.name}</h1>
-          <p className="text-xs text-zinc-500">Versão {playlist.version}</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{playlist.name}</h1>
+          <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Versão {playlist.version}</p>
         </div>
         <DeletePlaylistButton id={playlist.id} />
       </div>

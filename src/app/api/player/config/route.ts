@@ -9,7 +9,10 @@ export async function GET(req: NextRequest) {
   const tvId = req.nextUrl.searchParams.get("tvId");
   if (!tvId) return NextResponse.json({ error: "tvId obrigatório" }, { status: 400 });
 
-  const found = await db.query.tv.findFirst({ where: eq(tv.id, tvId) });
+  const found = await db.query.tv.findFirst({
+    columns: { paired: true, playlistId: true },
+    where: eq(tv.id, tvId),
+  });
   if (!found) return NextResponse.json({ error: "TV não encontrada" }, { status: 404 });
   if (!found.paired) return NextResponse.json({ paired: false });
 

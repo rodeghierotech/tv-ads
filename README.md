@@ -3,31 +3,47 @@
 MVP de plataforma de gerenciamento de anúncios para TVs/monitores.
 
 ## Stack
-Next.js 15 (App Router) · TypeScript · Tailwind · Drizzle ORM · PostgreSQL (Supabase) · Better Auth · Supabase Storage · dnd-kit
+Next.js 16 (App Router) · TypeScript · Tailwind · Drizzle ORM · PostgreSQL · Better Auth · dnd-kit
 
 ## Setup
 
 ```bash
 npm install
 cp .env.example .env
-# preencher DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BETTER_AUTH_SECRET e BETTER_AUTH_URL
+# preencher DATABASE_URL, BETTER_AUTH_SECRET e BETTER_AUTH_URL
 ```
 
-1. Criar projeto no Supabase.
-2. Rodar `supabase/storage-setup.sql` no SQL Editor (cria o bucket `media`).
-3. Gerar e aplicar as migrations:
+1. Criar/configurar um banco PostgreSQL.
+2. Gerar e aplicar as migrations:
    ```bash
    npm run db:generate
    npm run db:migrate
    ```
-4. Criar o usuário admin:
+3. Criar o usuário admin:
    ```bash
-   npx tsx scripts/create-admin.ts admin@empresa.com senha123
+   npx tsx scripts/create-admin.ts admin@empresa.com "troque-por-uma-senha-forte"
    ```
-5. Rodar o projeto:
+4. Rodar o projeto:
    ```bash
    npm run dev
    ```
+
+## Deploy na Vercel
+
+Configure estas variaveis em **Project Settings > Environment Variables** antes do deploy:
+
+```bash
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require
+BETTER_AUTH_SECRET=generate-a-long-random-secret
+BETTER_AUTH_URL=https://seu-projeto.vercel.app
+```
+
+Observacoes:
+
+- `DATABASE_URL` deve ser a string de conexao do PostgreSQL de producao.
+- `BETTER_AUTH_URL` deve usar a URL final da Vercel em producao.
+- Depois do primeiro deploy, rode as migrations no banco de producao e crie o usuario admin.
+- Se alguma chave real foi commitada por engano, gere novas chaves antes de publicar.
 
 ## Fluxo de uso
 
@@ -44,10 +60,10 @@ cp .env.example .env
 ```
 src/
   db/           schema + client Drizzle
-  lib/          auth, supabase storage, pareamento
+  lib/          auth, storage local em data URL, pareamento
   actions/      server actions (tv, media, playlist)
   app/
-    (painel)/   layout + páginas do painel (protegidas por middleware)
+    (painel)/   layout + páginas do painel (protegidas por proxy)
     player/     página fullscreen do player
     api/        rotas do player (pair, config, heartbeat) + better-auth
 ```
@@ -57,6 +73,7 @@ src/
 - **Sincronização**: polling simples baseado em número de versão da playlist (incrementado a cada alteração). Preparado para trocar por SSE/WebSocket depois — basta substituir o `setInterval` em `player/page.tsx` por uma subscription.
 - **Status online/offline**: derivado do `lastHeartbeat` em tempo de leitura (`computeTvStatus`), sem job em background.
 - **Pareamento**: código alfanumérico de 8 chars gerado com `crypto.randomBytes`, não sequencial.
+- **Mídia**: arquivos enviados são convertidos para data URL e salvos no banco. Para arquivos grandes ou produção com muitos vídeos, troque por storage externo.
 - **Cache offline**: o Player mantém o `<img>`/`<video>` já carregado em memória; para cache mais robusto (Service Worker) fica como próximo passo, indicado no código.
 - **Multi-empresa/permissões/agendamento**: schema deixa espaço para extensão (ex: `companyId` em `tv`), mas não implementado no MVP.
 

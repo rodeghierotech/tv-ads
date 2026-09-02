@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   DndContext,
   closestCenter,
@@ -30,7 +31,9 @@ export function PlaylistEditor({
   availableMedia: { id: string; name: string; type: "image" | "video" }[];
 }) {
   const [items, setItems] = useState(initialItems);
+  const [mediaOptions, setMediaOptions] = useState(availableMedia);
   const [, start] = useTransition();
+  const router = useRouter();
   const sensors = useSensors(useSensor(PointerSensor));
 
   function handleDragEnd(event: DragEndEvent) {
@@ -46,14 +49,33 @@ export function PlaylistEditor({
   async function handleAdd(mediaId: string) {
     if (!mediaId) return;
     start(async () => {
-      await addItemToPlaylist(playlistId, mediaId);
+      const created = await addItemToPlaylist(playlistId, mediaId);
+      if (!created) {
+        toast.error("Erro ao adicionar conteúdo.");
+        return;
+      }
+
+      setItems((prev) => [...prev, { id: created.id, media: created.media }]);
+      setMediaOptions((prev) => prev.filter((media) => media.id !== mediaId));
       toast.success("Conteúdo adicionado.");
+      router.refresh();
     });
   }
 
   async function handleRemove(itemId: string) {
-    setItems((prev) => prev.filter((i) => i.id !== itemId));
-    start(() => removeItemFromPlaylist(itemId, playlistId));
+    const removed = items.find((item) => item.id === itemId);
+    setItems((prev) => prev.filter((item) => item.id !== itemId));
+    if (removed) {
+      setMediaOptions((prev) =>
+        [...prev, { id: removed.media.id, name: removed.media.name, type: removed.media.type }].sort((a, b) =>
+          a.name.localeCompare(b.name, "pt-BR"),
+        ),
+      );
+    }
+    start(async () => {
+      await removeItemFromPlaylist(itemId, playlistId);
+      router.refresh();
+    });
   }
 
   return (
@@ -64,10 +86,10 @@ export function PlaylistEditor({
           handleAdd(e.target.value);
           e.target.value = "";
         }}
-        className="bg-zinc-950 border border-zinc-700 rounded-md text-sm px-3 py-2"
+        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100"
       >
         <option value="">+ Adicionar conteúdo...</option>
-        {availableMedia.map((m) => (
+        {mediaOptions.map((m) => (
           <option key={m.id} value={m.id}>
             {m.name} ({m.type === "image" ? "imagem" : "vídeo"})
           </option>
@@ -75,7 +97,7 @@ export function PlaylistEditor({
       </select>
 
       {items.length === 0 ? (
-        <div className="text-zinc-500 text-sm border border-dashed border-zinc-800 rounded-lg p-8 text-center">
+        <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 p-8 text-center text-sm text-zinc-500">
           Nenhum conteúdo nesta playlist.
         </div>
       ) : (
@@ -101,15 +123,17 @@ function SortableRow({ item, index, onRemove }: { item: Item; index: number; onR
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-md p-3"
+      className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-3"
     >
       <button {...attributes} {...listeners} className="cursor-grab text-zinc-500">
         <GripVertical size={16} />
       </button>
-      <span className="text-zinc-500 text-sm w-5">{index + 1}.</span>
-      <span className="flex-1 text-sm">{item.media.name}</span>
-      <span className="text-xs text-zinc-500">{item.media.type === "image" ? `${item.media.duration}s` : "vídeo"}</span>
-      <button onClick={onRemove} className="text-zinc-500 hover:text-red-400">
+      <span className="w-5 text-sm text-zinc-500">{index + 1}.</span>
+      <span className="min-w-0 flex-1 truncate text-sm text-zinc-100">{item.media.name}</span>
+      <span className="hidden text-xs text-zinc-500 sm:inline-block">
+        {item.media.type === "image" ? `${item.media.duration}s` : "vídeo"}
+      </span>
+      <button onClick={onRemove} className="text-zinc-500 transition-colors hover:text-red-400" aria-label="Remover item da playlist">
         <X size={16} />
       </button>
     </div>
