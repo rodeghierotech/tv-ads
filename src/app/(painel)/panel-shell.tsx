@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { LayoutDashboard, Tv, ImageIcon, ListVideo, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Tv, ImageIcon, ListVideo, LogOut, Menu, X, CalendarDays } from "lucide-react";
 
 const nav = [
   { section: "Principal", items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
@@ -12,6 +12,7 @@ const nav = [
       { href: "/tvs", label: "TVs", icon: Tv },
       { href: "/conteudos", label: "Conteúdos", icon: ImageIcon },
       { href: "/playlists", label: "Playlists", icon: ListVideo },
+      { href: "/programacao", label: "Programação", icon: CalendarDays },
     ],
   },
 ];
@@ -68,7 +69,7 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 xl:p-10">{children}</main>
+        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8 xl:p-10">{children}</main>
       </div>
     </div>
   );

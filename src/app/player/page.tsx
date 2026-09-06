@@ -25,64 +25,121 @@ export default function PlayerPage() {
   const [paired, setPaired] = useState(false);
   const [playlist, setPlaylist] = useState<PlaylistData>(null);
   const [index, setIndex] = useState(0);
-  const versionRef = useRef<number | null>(null);
+  const versionRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const registrationRef = useRef<Promise<{ tvId: string; code: string }> | null>(null);
+  const [pairError, setPairError] = useState<string | null>(null);
+
   useEffect(() => {
-    const stored = localStorage.getItem(DEVICE_KEY);
-    if (stored) {
-      setTvId(stored);
-    } else {
-      fetch("/api/player/pair", { method: "POST" })
-        .then((r) => r.json())
-        .then((data) => {
-          localStorage.setItem(DEVICE_KEY, data.tvId);
+    if (paired) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const check = async () => {
+      try {
+        let deviceId = localStorage.getItem(DEVICE_KEY);
+        if (deviceId) {
+          const response = await fetch('/api/player/pair?tvId=' + encodeURIComponent(deviceId), { cache: 'no-store' });
+          if (stopped) return;
+          if (response.status === 404) {
+            localStorage.removeItem(DEVICE_KEY);
+            deviceId = null;
+            setTvId(null);
+            setCode(null);
+            setPlaylist(null);
+            setIndex(0);
+            versionRef.current = null;
+          } else {
+            if (!response.ok) throw new Error('Pareamento indisponível');
+            const data = await response.json();
+            if (stopped) return;
+            setTvId(deviceId);
+            setCode(data.code);
+            setPaired(data.paired === true);
+            setPairError(null);
+            return;
+          }
+        }
+        if (!deviceId) {
+          // Share an in-flight registration across development effect replays.
+          if (!registrationRef.current) {
+            registrationRef.current = (async () => {
+              const response = await fetch('/api/player/pair', { method: 'POST' });
+              if (!response.ok) throw new Error('Não foi possível registrar a TV');
+              const data = await response.json();
+              if (typeof data.tvId !== 'string' || typeof data.code !== 'string') throw new Error('Resposta inválida');
+              localStorage.setItem(DEVICE_KEY, data.tvId);
+              return data as { tvId: string; code: string };
+            })();
+          }
+          const registration = registrationRef.current;
+          let data: { tvId: string; code: string };
+          try { data = await registration; }
+          finally { if (registrationRef.current === registration) registrationRef.current = null; }
+          if (stopped) return;
           setTvId(data.tvId);
           setCode(data.code);
-        });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!tvId || paired) return;
-    const check = () =>
-      fetch(`/api/player/pair?tvId=${tvId}`)
-        .then((r) => r.json())
-        .then((data) => {
-          setCode(data.code);
-          if (data.paired) setPaired(true);
-        });
-    check();
-    const interval = setInterval(check, 5000);
-    return () => clearInterval(interval);
-  }, [tvId, paired]);
-
-  const syncConfig = useCallback(() => {
-    if (!tvId) return;
-    fetch(`/api/player/config?tvId=${tvId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.paired) {
-          setPaired(false);
-          return;
+          setPairError(null);
         }
-        setPaired(true);
-        if (data.playlist && data.playlist.version !== versionRef.current) {
-          versionRef.current = data.playlist.version;
-          setPlaylist(data.playlist);
-          setIndex(0);
-        } else if (!data.playlist) {
-          setPlaylist(null);
-        }
-      });
-  }, [tvId]);
+      } catch {
+        if (!stopped) setPairError('Não foi possível conectar. Tentando novamente em 5 segundos…');
+      } finally {
+        if (!stopped) timer = setTimeout(check, 5000);
+      }
+    };
+    void check();
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [paired]);
 
   useEffect(() => {
     if (!tvId || !paired) return;
-    syncConfig();
-    const interval = setInterval(syncConfig, SYNC_INTERVAL);
-    return () => clearInterval(interval);
-  }, [tvId, paired, syncConfig]);
+    let stopped = false;
+    let timeout: ReturnType<typeof setTimeout>;
+    const controller = new AbortController();
+    const sync = async () => {
+      let delay = SYNC_INTERVAL;
+      const started = performance.now();
+      try {
+        const response = await fetch(`/api/player/config?tvId=${tvId}`, { cache: "no-store", signal: controller.signal });
+        if (stopped) return;
+        if (response.status === 404) {
+          // Return to pairing; that flow confirms the missing ID before replacing it.
+          versionRef.current = null;
+          setPlaylist(null);
+          setIndex(0);
+          setCode(null);
+          setPaired(false);
+          return;
+        }
+        if (!response.ok) throw new Error("Configuração indisponível");
+        const data = await response.json();
+        if (stopped) return;
+        if (data.paired === false) {
+          versionRef.current = null;
+          setPlaylist(null);
+          setIndex(0);
+          setPaired(false);
+          return;
+        }
+        const key = data.playlist ? `${data.playlist.id}:${data.playlist.version}` : null;
+        if (key !== versionRef.current) {
+          versionRef.current = key;
+          setPlaylist(data.playlist);
+          setIndex(0);
+        }
+        if (data.nextChangeAt && data.serverNow) {
+          const remaining = Date.parse(data.nextChangeAt) - Date.parse(data.serverNow) - (performance.now() - started);
+          if (Number.isFinite(remaining)) delay = Math.max(250, Math.min(SYNC_INTERVAL, remaining));
+        }
+      } catch {
+        // Keep the current playlist during temporary connection failures.
+      } finally {
+        if (!stopped) timeout = setTimeout(sync, delay);
+      }
+    };
+    void sync();
+    return () => { stopped = true; controller.abort(); clearTimeout(timeout); };
+  }, [tvId, paired]);
 
   useEffect(() => {
     if (!tvId || !paired) return;
@@ -114,7 +171,7 @@ export default function PlayerPage() {
   }, [currentItem, advance]);
 
   if (!tvId || (!paired && !code)) {
-    return <FullscreenMessage title="Iniciando..." />;
+    return <FullscreenMessage title={pairError ?? "Iniciando..."} />;
   }
 
   if (!paired) {
@@ -124,6 +181,7 @@ export default function PlayerPage() {
         <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-4xl font-mono font-bold tracking-[0.35em] text-white sm:text-5xl">
           {code}
         </div>
+        {pairError && <p role="status" className="text-sm text-amber-300">{pairError}</p>}
       </FullscreenMessage>
     );
   }

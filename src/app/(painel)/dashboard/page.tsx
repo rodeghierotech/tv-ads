@@ -1,15 +1,18 @@
 import { db } from "@/db";
+import { getSchedulePanelData } from "@/actions/schedule";
+import { ScheduleOverview } from "../programacao/schedule-status";
 import { media, playlist } from "@/db/schema";
 import { listTvsWithStatus } from "@/actions/tv";
 import { count, eq } from "drizzle-orm";
 import { Activity, Film, ImageIcon, ListVideo, MonitorPlay, Tv, Wifi, WifiOff } from "lucide-react";
 
 export default async function DashboardPage() {
-  const [tvs, [{ imgCount }], [{ vidCount }], [{ playlistCount }]] = await Promise.all([
+  const [tvs, [{ imgCount }], [{ vidCount }], [{ playlistCount }], scheduleData] = await Promise.all([
     listTvsWithStatus(),
     db.select({ imgCount: count() }).from(media).where(eq(media.type, "image")),
     db.select({ vidCount: count() }).from(media).where(eq(media.type, "video")),
     db.select({ playlistCount: count() }).from(playlist),
+    getSchedulePanelData(),
   ]);
 
   const online = tvs.filter((t) => t.status === "online").length;
@@ -88,6 +91,7 @@ export default async function DashboardPage() {
         <StatCard title="Playlists" icon={ListVideo} tone="amber" rows={[["Total", playlistCount]]} />
       </div>
 
+      <ScheduleOverview initialData={scheduleData} />
       <section className="grid gap-4 xl:grid-cols-[1fr_340px]">
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 shadow-xl shadow-black/10">
           <div className="flex items-center justify-between gap-4 border-b border-zinc-800 px-4 py-4 sm:px-5">

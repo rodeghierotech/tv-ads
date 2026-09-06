@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { tv } from "@/db/schema";
+import { tv, tvSchedule } from "@/db/schema";
+import { resolveWeeklySchedule } from "@/lib/scheduling";
 import { eq } from "drizzle-orm";
 import { getPlaylistWithItems } from "@/actions/playlist";
 
@@ -16,10 +17,12 @@ export async function GET(req: NextRequest) {
   if (!found) return NextResponse.json({ error: "TV não encontrada" }, { status: 404 });
   if (!found.paired) return NextResponse.json({ paired: false });
 
-  if (!found.playlistId) {
-    return NextResponse.json({ paired: true, playlist: null });
-  }
-
-  const playlistData = await getPlaylistWithItems(found.playlistId);
-  return NextResponse.json({ paired: true, playlist: playlistData });
+  const schedules = await db.select().from(tvSchedule).where(eq(tvSchedule.tvId, tvId));
+  const now = new Date();
+  const { active, nextChangeAt } = resolveWeeklySchedule(schedules, now);
+  const playlistId = active?.playlistId ?? found.playlistId;
+  const playlistData = playlistId ? await getPlaylistWithItems(playlistId) : null;
+  return NextResponse.json({ paired: true, playlist: playlistData ?? null,
+    serverNow: now.toISOString(), nextChangeAt, activeScheduleId: active?.id ?? null,
+  }, { headers: { "Cache-Control": "no-store" } });
 }

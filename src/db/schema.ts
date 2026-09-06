@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, integer, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, uuid, text, integer, timestamp, pgEnum, boolean, index, check } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
 
 // ---------- Better Auth ----------
 export const user = pgTable("user", {
@@ -90,7 +90,28 @@ export const tv = pgTable("tv", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const tvSchedule = pgTable("tv_schedule", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tvId: uuid("tv_id").notNull().references(() => tv.id, { onDelete: "cascade" }),
+  playlistId: uuid("playlist_id").notNull().references(() => playlist.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  days: integer("days").array().notNull(),
+  startMinute: integer("start_minute").notNull(),
+  endMinute: integer("end_minute").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("tv_schedule_tv_id_idx").on(table.tvId),
+  check("tv_schedule_minutes_check", sql`${table.startMinute} >= 0 AND ${table.startMinute} < ${table.endMinute} AND ${table.endMinute} <= 1440`),
+  check("tv_schedule_days_check", sql`cardinality(${table.days}) BETWEEN 1 AND 7 AND ${table.days} <@ ARRAY[0,1,2,3,4,5,6]::integer[] AND array_position(${table.days}, NULL) IS NULL`),
+]);
+
 // ---------- Relations ----------
+export const tvScheduleRelations = relations(tvSchedule, ({ one }) => ({
+  tv: one(tv, { fields: [tvSchedule.tvId], references: [tv.id] }),
+  playlist: one(playlist, { fields: [tvSchedule.playlistId], references: [playlist.id] }),
+}));
+
 export const playlistRelations = relations(playlist, ({ many }) => ({
   items: many(playlistItem),
   tvs: many(tv),
