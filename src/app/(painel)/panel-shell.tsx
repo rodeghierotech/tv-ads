@@ -1,8 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { LayoutDashboard, Tv, ImageIcon, ListVideo, LogOut, Menu, X, CalendarDays } from "lucide-react";
+
+import { signOut } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 const nav = [
   { section: "Principal", items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
@@ -19,6 +23,8 @@ const nav = [
 
 export function PanelShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [pending, start] = useTransition();
+  const router = useRouter();
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -28,7 +34,8 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
             <div className="text-lg font-semibold tracking-tight text-white">TV Ads</div>
             <button
               type="button"
-              aria-label="Abrir menu"
+              aria-label={open ? "Fechar menu" : "Abrir menu"}
+              aria-expanded={open}
               className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-800 text-zinc-200 lg:hidden"
               onClick={() => setOpen((value) => !value)}
             >
@@ -60,8 +67,8 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className={`${open ? "block" : "hidden"} border-t border-zinc-800 px-3 py-3 lg:block lg:mt-auto lg:px-3 lg:pb-4`}>
-            <form action="/api/auth/sign-out" method="POST">
-              <button className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:border-zinc-700 hover:bg-zinc-900 hover:text-white lg:justify-start">
+            <form action={() => start(async () => { try { const { error } = await signOut(); if (error) { toast.error("Não foi possível sair."); return; } router.replace("/login"); router.refresh(); } catch { toast.error("Não foi possível sair. Tente novamente."); } })}>
+              <button disabled={pending} className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:border-zinc-700 hover:bg-zinc-900 hover:text-white lg:justify-start">
                 <LogOut size={16} />
                 Sair
               </button>

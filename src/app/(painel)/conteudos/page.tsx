@@ -1,5 +1,4 @@
 import { listMedia } from "@/actions/media";
-import { extractStoragePath } from "@/lib/media-storage";
 import { UploadMediaDialog, DeleteMediaButton } from "./media-dialogs";
 
 export default async function ConteudosPage() {
@@ -26,9 +25,9 @@ export default async function ConteudosPage() {
               <div className="aspect-video bg-zinc-950">
                 {item.type === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.url} alt={item.name} className="h-full w-full object-cover" />
+                  <img loading="lazy" src={item.url} alt={item.name} className="h-full w-full object-cover" />
                 ) : (
-                  <video src={item.url} className="h-full w-full object-cover" muted />
+                  <video preload="none" src={item.url} className="h-full w-full object-cover" muted />
                 )}
               </div>
               <div className="space-y-3 p-3">
@@ -38,7 +37,7 @@ export default async function ConteudosPage() {
                     {item.type === "image" ? `Imagem · ${item.duration}s` : "Vídeo"}
                   </div>
                 </div>
-                <DeleteMediaButton id={item.id} storagePath={extractStoragePath(item.url)} />
+                <DeleteMediaButton id={item.id} />
               </div>
             </div>
           ))}

@@ -2,12 +2,10 @@
 
 import { db } from "@/db";
 import { playlist, tv, tvSchedule } from "@/db/schema";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/require-session";
 import { findScheduleConflicts, formatMinute, WEEK_DAYS } from "@/lib/scheduling";
 import { and, eq } from "drizzle-orm";
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
 const inputSchema = z.object({
@@ -19,11 +17,6 @@ const inputSchema = z.object({
   startMinute: z.number().int().min(0).max(1439),
   endMinute: z.number().int().min(1).max(1440),
 }).refine((s) => s.startMinute < s.endMinute, { message: "O fim deve ser posterior ao início. Para atravessar a meia-noite, crie dois blocos." });
-
-async function requireSession() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/login");
-}
 
 function refreshSchedulePages() {
   for (const path of ["/programacao", "/dashboard", "/tvs"]) revalidatePath(path);
@@ -46,6 +39,9 @@ export async function saveSchedule(input: z.input<typeof inputSchema>) {
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0].message, conflictIds: [] as string[] };
   const data = parsed.data;
   const result = await db.transaction(async (tx) => {
+    // Playlist deletions lock the playlist before cascading to TVs/schedules.
+    const [target] = await tx.select({ id: playlist.id }).from(playlist).where(eq(playlist.id, data.playlistId)).for("key share");
+    if (!target) return { ok: false as const, error: "Playlist não encontrada. Atualize a página.", conflictIds: [] as string[] };
     // Serialize all schedule edits for this TV, including simultaneous submissions.
     const [device] = await tx.select({ id: tv.id }).from(tv).where(eq(tv.id, data.tvId)).for("update");
     if (!device) return { ok: false as const, error: "TV não encontrada.", conflictIds: [] as string[] };
@@ -57,8 +53,6 @@ export async function saveSchedule(input: z.input<typeof inputSchema>) {
     if (conflicts.length) {
       return { ok: false as const, error: `Conflito com ${conflicts.map((s) => `“${s.name}” (${s.days.filter((d) => data.days.includes(d)).map((d) => WEEK_DAYS[d]).join(", ")}, ${formatMinute(s.startMinute)}–${formatMinute(s.endMinute)})`).join("; ")}.`, conflictIds: conflicts.map((s) => s.id) };
     }
-    const [target] = await tx.select({ id: playlist.id }).from(playlist).where(eq(playlist.id, data.playlistId)).for("key share");
-    if (!target) return { ok: false as const, error: "Playlist não encontrada. Atualize a página.", conflictIds: [] as string[] };
     const { id, ...values } = data;
     if (id) {
       await tx.update(tvSchedule).set({ ...values, updatedAt: new Date() }).where(and(eq(tvSchedule.id, id), eq(tvSchedule.tvId, data.tvId)));

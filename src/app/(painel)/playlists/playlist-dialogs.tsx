@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPlaylist, deletePlaylist } from "@/actions/playlist";
 import { toast } from "sonner";
+import { Modal } from "@/app/modal";
 
 export function CreatePlaylistDialog() {
   const [open, setOpen] = useState(false);
@@ -16,22 +17,24 @@ export function CreatePlaylistDialog() {
         + Nova playlist
       </button>
       {open && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="mx-3 w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold mb-4">Nova playlist</h2>
+        <Modal title="Nova playlist" onClose={() => { if (!pending) setOpen(false); }}>
             <form
               action={(formData) => {
                 start(async () => {
+                  try {
                   const created = await createPlaylist(String(formData.get("name")));
                   toast.success("Playlist criada.");
                   setOpen(false);
                   router.push(`/playlists/${created.id}`);
+                  } catch { toast.error("Não foi possível criar a playlist."); }
                 });
               }}
               className="space-y-3"
             >
               <input
                 name="name"
+                aria-label="Nome da playlist"
+                maxLength={100}
                 required
                 placeholder="Ex: Promoções Agosto"
                 className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm"
@@ -40,8 +43,7 @@ export function CreatePlaylistDialog() {
                 {pending ? "Criando..." : "Criar"}
               </button>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );
@@ -54,10 +56,10 @@ export function DeletePlaylistButton({ id }: { id: string }) {
     <button
       disabled={pending}
       onClick={() => {
-        if (confirm("Excluir esta playlist? As TVs vinculadas ficarão sem playlist.")) {
+        if (confirm("Excluir esta playlist? As TVs vinculadas ficarão sem playlist padrão e os agendamentos desta playlist serão removidos.")) {
           start(async () => {
-            await deletePlaylist(id);
-            router.push("/playlists");
+            try { await deletePlaylist(id); router.push("/playlists"); }
+            catch { toast.error("Não foi possível excluir a playlist."); }
           });
         }
       }}

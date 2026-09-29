@@ -84,11 +84,18 @@ export const tv = pgTable("tv", {
   location: text("location"),
   pairingCode: text("pairing_code").notNull().unique(),
   paired: boolean("paired").notNull().default(false),
+  deviceTokenHash: text("device_token_hash"),
   status: tvStatusEnum("status").notNull().default("offline"),
   lastHeartbeat: timestamp("last_heartbeat"),
   playlistId: uuid("playlist_id").references(() => playlist.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const playerRateLimit = pgTable("player_rate_limit", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+}, (table) => [index("player_rate_limit_expires_at_idx").on(table.expiresAt)]);
 
 export const tvSchedule = pgTable("tv_schedule", {
   id: uuid("id").primaryKey().defaultRandom(),

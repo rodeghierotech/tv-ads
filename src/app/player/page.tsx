@@ -1,47 +1,60 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { QRCodeSVG } from "qrcode.react";
+
+import { fetchJsonWithTimeout, fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { playerConfigSchema, playerPairSchema, playerRegistrationSchema, type PlayerPlaylist } from "@/lib/player-contract";
+import { idSchema } from "@/lib/validation";
+import { ensureDeviceToken } from "@/lib/device-identity";
 
 const DEVICE_KEY = "tv-ads-device-id";
 const HEARTBEAT_INTERVAL = 30_000;
 const SYNC_INTERVAL = 15_000;
 const DEFAULT_IMAGE_DURATION = 10;
 
-type MediaItem = {
-  id: string;
-  media: { id: string; type: "image" | "video"; url: string; name: string; duration: number | null };
-  durationOverride: number | null;
-};
-
-type PlaylistData = {
-  id: string;
-  version: number;
-  items: MediaItem[];
-} | null;
+function playerHeaders(id: string): Record<string, string> {
+  const token = localStorage.getItem(`${DEVICE_KEY}:token:${id}`);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export default function PlayerPage() {
   const [tvId, setTvId] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
   const [paired, setPaired] = useState(false);
-  const [playlist, setPlaylist] = useState<PlaylistData>(null);
+  const [pairingUrl, setPairingUrl] = useState<string | null>(null);
+  const [playlist, setPlaylist] = useState<PlayerPlaylist | null>(null);
   const [index, setIndex] = useState(0);
+  const [playbackCycle, setPlaybackCycle] = useState(0);
   const versionRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoProgressRef = useRef(0);
 
   const registrationRef = useRef<Promise<{ tvId: string; code: string }> | null>(null);
   const [pairError, setPairError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPairingUrl(code ? `${window.location.origin}/tvs?pair=${encodeURIComponent(code)}` : null);
+  }, [code]);
 
   useEffect(() => {
     if (paired) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const check = async () => {
+      let retryDelay = 5000;
       try {
         let deviceId = localStorage.getItem(DEVICE_KEY);
+        if (deviceId && !idSchema.safeParse(deviceId).success) {
+          localStorage.removeItem(DEVICE_KEY);
+          deviceId = null;
+        }
         if (deviceId) {
-          const response = await fetch('/api/player/pair?tvId=' + encodeURIComponent(deviceId), { cache: 'no-store' });
+          ensureDeviceToken(deviceId);
+          const response = await fetchJsonWithTimeout('/api/player/pair?tvId=' + encodeURIComponent(deviceId), { cache: 'no-store', headers: { ...playerHeaders(deviceId), 'x-player-upgrade': '1' } });
           if (stopped) return;
-          if (response.status === 404) {
+          if (response.status === 404 || response.status === 401) {
+            localStorage.removeItem(`${DEVICE_KEY}:token:${deviceId}`);
             localStorage.removeItem(DEVICE_KEY);
             deviceId = null;
             setTvId(null);
@@ -51,7 +64,8 @@ export default function PlayerPage() {
             versionRef.current = null;
           } else {
             if (!response.ok) throw new Error('Pareamento indisponível');
-            const data = await response.json();
+            const data = playerPairSchema.parse(response.data);
+            if (data.token) localStorage.setItem(`${DEVICE_KEY}:token:${deviceId}`, data.token);
             if (stopped) return;
             setTvId(deviceId);
             setCode(data.code);
@@ -64,10 +78,11 @@ export default function PlayerPage() {
           // Share an in-flight registration across development effect replays.
           if (!registrationRef.current) {
             registrationRef.current = (async () => {
-              const response = await fetch('/api/player/pair', { method: 'POST' });
+              const response = await fetchJsonWithTimeout('/api/player/pair', { method: 'POST' });
+              if (response.status === 429) { retryDelay = 600000; throw new Error('Muitos registros. Uma nova tentativa será feita em 10 minutos.'); }
               if (!response.ok) throw new Error('Não foi possível registrar a TV');
-              const data = await response.json();
-              if (typeof data.tvId !== 'string' || typeof data.code !== 'string') throw new Error('Resposta inválida');
+              const data = playerRegistrationSchema.parse(response.data);
+              localStorage.setItem(`${DEVICE_KEY}:token:${data.tvId}`, data.token);
               localStorage.setItem(DEVICE_KEY, data.tvId);
               return data as { tvId: string; code: string };
             })();
@@ -82,9 +97,9 @@ export default function PlayerPage() {
           setPairError(null);
         }
       } catch {
-        if (!stopped) setPairError('Não foi possível conectar. Tentando novamente em 5 segundos…');
+        if (!stopped) setPairError(retryDelay === 600000 ? 'Muitos registros. Tentando novamente em 10 minutos…' : 'Não foi possível conectar. Tentando novamente em 5 segundos…');
       } finally {
-        if (!stopped) timer = setTimeout(check, 5000);
+        if (!stopped) timer = setTimeout(check, retryDelay);
       }
     };
     void check();
@@ -100,9 +115,10 @@ export default function PlayerPage() {
       let delay = SYNC_INTERVAL;
       const started = performance.now();
       try {
-        const response = await fetch(`/api/player/config?tvId=${tvId}`, { cache: "no-store", signal: controller.signal });
+        const known = versionRef.current;
+        const response = await fetchJsonWithTimeout(`/api/player/config?tvId=${tvId}${known ? `&knownPlaylist=${encodeURIComponent(known)}` : ""}`, { cache: "no-store", signal: controller.signal, headers: playerHeaders(tvId) });
         if (stopped) return;
-        if (response.status === 404) {
+        if (response.status === 404 || response.status === 401) {
           // Return to pairing; that flow confirms the missing ID before replacing it.
           versionRef.current = null;
           setPlaylist(null);
@@ -112,7 +128,7 @@ export default function PlayerPage() {
           return;
         }
         if (!response.ok) throw new Error("Configuração indisponível");
-        const data = await response.json();
+        const data = playerConfigSchema.parse(response.data);
         if (stopped) return;
         if (data.paired === false) {
           versionRef.current = null;
@@ -121,11 +137,13 @@ export default function PlayerPage() {
           setPaired(false);
           return;
         }
-        const key = data.playlist ? `${data.playlist.id}:${data.playlist.version}` : null;
-        if (key !== versionRef.current) {
-          versionRef.current = key;
-          setPlaylist(data.playlist);
-          setIndex(0);
+        if ("playlist" in data) {
+          const key = data.playlist ? `${data.playlist.id}:${data.playlist.version}` : null;
+          if (key !== versionRef.current) {
+            versionRef.current = key;
+            setPlaylist(data.playlist);
+            setIndex(0);
+          }
         }
         if (data.nextChangeAt && data.serverNow) {
           const remaining = Date.parse(data.nextChangeAt) - Date.parse(data.serverNow) - (performance.now() - started);
@@ -143,14 +161,16 @@ export default function PlayerPage() {
 
   useEffect(() => {
     if (!tvId || !paired) return;
-    const beat = () => fetch("/api/player/heartbeat", {
+    const controller = new AbortController();
+    const beat = async () => { try { await fetchWithTimeout("/api/player/heartbeat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...playerHeaders(tvId) },
+      signal: controller.signal,
       body: JSON.stringify({ tvId }),
-    });
+    }); } catch { /* Retry on the next heartbeat. */ } };
     beat();
     const interval = setInterval(beat, HEARTBEAT_INTERVAL);
-    return () => clearInterval(interval);
+    return () => { controller.abort(); clearInterval(interval); };
   }, [tvId, paired]);
 
   const currentItem = playlist?.items?.[index] ?? null;
@@ -158,17 +178,23 @@ export default function PlayerPage() {
   const advance = useCallback(() => {
     if (!playlist || playlist.items.length === 0) return;
     setIndex((i) => (i + 1) % playlist.items.length);
+    setPlaybackCycle((cycle) => cycle + 1);
   }, [playlist]);
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (!currentItem || currentItem.media.type !== "image") return;
-    const seconds = currentItem.durationOverride ?? currentItem.media.duration ?? DEFAULT_IMAGE_DURATION;
-    timerRef.current = setTimeout(advance, seconds * 1000);
+    videoProgressRef.current = 0;
+    if (currentItem?.media.type === "image") {
+      const duration = currentItem.durationOverride ?? currentItem.media.duration ?? DEFAULT_IMAGE_DURATION;
+      const seconds = duration > 0 && Number.isFinite(duration) ? Math.min(duration, 86400) : DEFAULT_IMAGE_DURATION;
+      timerRef.current = setTimeout(advance, seconds * 1000);
+    } else if (currentItem?.media.type === "video") {
+      timerRef.current = setTimeout(advance, 30000);
+    }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [currentItem, advance]);
+  }, [currentItem, advance, playbackCycle]);
 
   if (!tvId || (!paired && !code)) {
     return <FullscreenMessage title={pairError ?? "Iniciando..."} />;
@@ -177,10 +203,30 @@ export default function PlayerPage() {
   if (!paired) {
     return (
       <FullscreenMessage title="Este dispositivo ainda não está conectado">
-        <p className="mb-5 max-w-md text-sm text-zinc-400">Digite este código no painel administrativo para conectar esta TV.</p>
-        <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-4xl font-mono font-bold tracking-[0.35em] text-white sm:text-5xl">
+        <p className="mx-auto max-w-md text-sm text-zinc-400">Escaneie o QR Code com o celular para abrir o pareamento no painel administrativo.</p>
+        {pairingUrl && (
+          <div className="mx-auto w-fit rounded-2xl bg-white p-3 shadow-2xl shadow-cyan-950/30 sm:p-4">
+            <QRCodeSVG
+              value={pairingUrl}
+              size={220}
+              level="M"
+              marginSize={1}
+              bgColor="#ffffff"
+              fgColor="#09090b"
+              title="QR Code para conectar esta TV"
+              className="h-44 w-44 sm:h-56 sm:w-56"
+            />
+          </div>
+        )}
+        <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+          <span className="h-px flex-1 bg-white/10" />
+          ou use o código
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 font-mono text-3xl font-bold tracking-[0.28em] text-white sm:text-4xl">
           {code}
         </div>
+        <p className="text-sm text-zinc-500">No painel, acesse TVs e escolha “Conectar dispositivo”.</p>
         {pairError && <p role="status" className="text-sm text-amber-300">{pairError}</p>}
       </FullscreenMessage>
     );
@@ -197,18 +243,29 @@ export default function PlayerPage() {
         {currentItem && currentItem.media.type === "image" ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            key={currentItem.id}
+            key={`${currentItem.id}:${playbackCycle}`}
             src={currentItem.media.url}
             alt={currentItem.media.name}
+            onError={() => { if (timerRef.current) clearTimeout(timerRef.current); timerRef.current = setTimeout(advance, 3000); }}
             className="h-full w-full object-contain"
           />
         ) : currentItem ? (
           <video
-            key={currentItem.id}
+            key={`${currentItem.id}:${playbackCycle}`}
             src={currentItem.media.url}
             className="h-full w-full object-contain"
             autoPlay
             muted
+            playsInline
+            onTimeUpdate={(event) => {
+              const position = event.currentTarget.currentTime;
+              if (position > videoProgressRef.current) {
+                videoProgressRef.current = position;
+                if (timerRef.current) clearTimeout(timerRef.current);
+                timerRef.current = setTimeout(advance, 30000);
+              }
+            }}
+            onError={() => { if (timerRef.current) clearTimeout(timerRef.current); timerRef.current = setTimeout(advance, 3000); }}
             onEnded={advance}
           />
         ) : null}

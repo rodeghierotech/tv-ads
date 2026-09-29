@@ -3,6 +3,8 @@
 import { useState, useTransition, useRef } from "react";
 import { uploadMedia, deleteMedia } from "@/actions/media";
 import { toast } from "sonner";
+import { Modal } from "@/app/modal";
+import { MAX_MEDIA_BYTES } from "@/lib/media-validation";
 
 export function UploadMediaDialog() {
   const [open, setOpen] = useState(false);
@@ -15,14 +17,14 @@ export function UploadMediaDialog() {
         + Enviar conteúdo
       </button>
       {open && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 w-full max-w-sm">
-            <h2 className="text-lg font-semibold mb-4">Enviar conteúdo</h2>
+        <Modal title="Enviar conteúdo" onClose={() => { if (!pending) setOpen(false); }}>
             <form
               ref={formRef}
               action={(formData) => {
                 start(async () => {
                   try {
+                    const file = formData.get("file");
+                    if (!(file instanceof File) || file.size > MAX_MEDIA_BYTES) { toast.error("Selecione um arquivo de até 3 MB."); return; }
                     await uploadMedia(formData);
                     toast.success("Conteúdo enviado.");
                     formRef.current?.reset();
@@ -35,35 +37,34 @@ export function UploadMediaDialog() {
               className="space-y-3"
             >
               <div>
-                <label className="text-sm text-zinc-400 block mb-1">Arquivo (imagem ou vídeo)</label>
-                <input type="file" name="file" required accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" className="w-full text-sm" />
+                <label htmlFor="media-file" className="text-sm text-zinc-400 block mb-1">Arquivo (imagem ou vídeo, até 3 MB)</label>
+                <input id="media-file" type="file" name="file" required accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" className="w-full text-sm" />
               </div>
               <div>
-                <label className="text-sm text-zinc-400 block mb-1">Nome</label>
-                <input name="name" className="w-full bg-zinc-950 border border-zinc-700 rounded-md px-3 py-2 text-sm" />
+                <label htmlFor="media-name" className="text-sm text-zinc-400 block mb-1">Nome</label>
+                <input id="media-name" name="name" maxLength={100} className="w-full bg-zinc-950 border border-zinc-700 rounded-md px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="text-sm text-zinc-400 block mb-1">Duração (segundos, apenas para imagem)</label>
-                <input name="duration" type="number" defaultValue={10} min={1} className="w-full bg-zinc-950 border border-zinc-700 rounded-md px-3 py-2 text-sm" />
+                <label htmlFor="media-duration" className="text-sm text-zinc-400 block mb-1">Duração (segundos, apenas para imagem)</label>
+                <input id="media-duration" name="duration" max={86400} type="number" defaultValue={10} min={1} className="w-full bg-zinc-950 border border-zinc-700 rounded-md px-3 py-2 text-sm" />
               </div>
               <button type="submit" disabled={pending} className="w-full bg-white text-black py-2 rounded-md text-sm font-medium disabled:opacity-50">
                 {pending ? "Enviando..." : "Enviar"}
               </button>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );
 }
 
-export function DeleteMediaButton({ id, storagePath }: { id: string; storagePath: string }) {
+export function DeleteMediaButton({ id }: { id: string }) {
   const [pending, start] = useTransition();
   return (
     <button
       disabled={pending}
       onClick={() => {
-        if (confirm("Excluir este conteúdo?")) start(() => deleteMedia(id, storagePath));
+        if (confirm("Excluir este conteúdo?")) start(async () => { try { await deleteMedia(id); toast.success("Conteúdo excluído."); } catch { toast.error("Não foi possível excluir o conteúdo."); } });
       }}
       className="text-red-400 text-xs hover:underline"
     >

@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import { getPlaylistWithItems } from "@/actions/playlist";
-import { listMedia } from "@/actions/media";
+import { listMediaOptions } from "@/actions/media";
 import { PlaylistEditor } from "../playlist-editor";
 import { DeletePlaylistButton } from "../playlist-dialogs";
 
 export default async function PlaylistDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [playlist, allMedia] = await Promise.all([getPlaylistWithItems(id), listMedia()]);
+  const [playlist, allMedia] = await Promise.all([getPlaylistWithItems(id), listMediaOptions()]);
 
   if (!playlist) notFound();
 
@@ -24,6 +24,7 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
       </div>
 
       <PlaylistEditor
+        key={`${playlist.id}:${playlist.version}`}
         playlistId={playlist.id}
         initialItems={playlist.items.map((i) => ({ id: i.id, media: i.media }))}
         availableMedia={availableMedia}

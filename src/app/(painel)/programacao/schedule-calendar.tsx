@@ -61,7 +61,8 @@ export function ScheduleCalendar({ initialData }: { initialData: PanelData }) {
           </fieldset>
         </form>
       </div>}
-      <section className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/60" aria-label="Calendário semanal">
+      <p className="text-xs text-zinc-400 lg:hidden">Deslize o calendário para ver todos os dias.</p>
+      <section tabIndex={0} className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/60" aria-label="Calendário semanal">
         <div className="grid min-w-[980px] grid-cols-7 divide-x divide-zinc-800">{CALENDAR_DAYS.map((day) => <div key={day} className="min-w-0">
           <h2 className="border-b border-zinc-800 bg-zinc-950/60 p-3 text-sm font-semibold">{WEEK_DAYS[day]}</h2>
           <div className="min-h-64 space-y-2 p-2">{schedules.filter((s) => s.days.includes(day)).map((s) => <button key={s.id} disabled={pending} onClick={() => open(s)} className={`block w-full rounded-lg border p-3 text-left text-xs ${conflicts.some((c) => c.id === s.id) ? "border-rose-400 bg-rose-400/10" : active?.id === s.id ? "border-emerald-400/50 bg-emerald-400/10" : "border-cyan-400/20 bg-cyan-400/5 hover:bg-cyan-400/10"}`}><span className="text-cyan-200">{formatMinute(s.startMinute)}–{formatMinute(s.endMinute)}</span><strong className="mt-2 block break-words text-sm">{s.name}</strong><span className="mt-1 block break-words text-zinc-400">{playlistName(s.playlistId)}</span></button>)}<button disabled={pending || !data.playlists.length} onClick={() => open(undefined, false, day)} className="w-full rounded-lg border border-dashed border-zinc-700 p-3 text-xs text-zinc-400 hover:text-white disabled:opacity-40" aria-label={`Adicionar agendamento em ${WEEK_DAYS[day]}`}>+ Adicionar</button></div>

@@ -1,8 +1,14 @@
 import { listTvsWithStatus } from "@/actions/tv";
 import { listPlaylists } from "@/actions/playlist";
-import { CreateTvDialog, PairTvDialog, AssignPlaylistSelect, DeleteTvButton } from "./tv-dialogs";
+import { CreateTvDialog, PairTvDialog, AssignPlaylistSelect, DeleteTvButton, RevokeTvButton } from "./tv-dialogs";
 
-export default async function TvsPage() {
+export default async function TvsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pair?: string | string[] }>;
+}) {
+  const pair = (await searchParams).pair;
+  const pairCode = normalizePairCode(typeof pair === "string" ? pair : undefined);
   const [tvs, playlists] = await Promise.all([listTvsWithStatus(), listPlaylists()]);
 
   return (
@@ -13,7 +19,7 @@ export default async function TvsPage() {
           <p className="text-sm text-zinc-400">Gerencie dispositivos, conexões e atribuições de playlist.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <PairTvDialog />
+          <PairTvDialog initialCode={pairCode} />
           <CreateTvDialog />
         </div>
       </div>
@@ -51,6 +57,7 @@ export default async function TvsPage() {
                     <AssignPlaylistSelect tvId={t.id} currentPlaylistId={t.playlistId} playlists={playlists} />
                   </td>
                   <td className="px-4 py-3 text-right">
+                    {t.paired && <RevokeTvButton id={t.id} />}
                     <DeleteTvButton id={t.id} />
                   </td>
                 </tr>
@@ -88,6 +95,7 @@ export default async function TvsPage() {
                   </div>
                   <div className="flex items-center justify-between gap-3 pt-1">
                     <span className="text-zinc-500">Ações</span>
+                    {t.paired && <RevokeTvButton id={t.id} />}
                     <DeleteTvButton id={t.id} />
                   </div>
                 </div>
@@ -98,6 +106,13 @@ export default async function TvsPage() {
       </section>
     </div>
   );
+}
+
+function normalizePairCode(value?: string) {
+  const normalized = value?.trim().toUpperCase().replace(/-/g, "") ?? "";
+  return /^[2-9A-HJ-NP-Z]{8}$/.test(normalized)
+    ? `${normalized.slice(0, 4)}-${normalized.slice(4)}`
+    : undefined;
 }
 
 function StatusBadge({ status }: { status: "online" | "offline" }) {

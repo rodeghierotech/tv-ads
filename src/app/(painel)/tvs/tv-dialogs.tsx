@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createTv, deleteTv, pairTvByCode, setTvPlaylist } from "@/actions/tv";
+import { useRouter } from "next/navigation";
+import { createTv, deleteTv, pairTvByCode, setTvPlaylist, revokeTvAccess } from "@/actions/tv";
 import { toast } from "sonner";
+import { Modal } from "@/app/modal";
 
 export function CreateTvDialog() {
   const [open, setOpen] = useState(false);
@@ -14,7 +16,7 @@ export function CreateTvDialog() {
         + Adicionar TV
       </button>
       {open && (
-        <Modal onClose={() => setOpen(false)} title="Adicionar TV">
+        <Modal onClose={() => { if (!pending) setOpen(false); }} title="Adicionar TV">
           <form
             action={(formData) => {
               start(async () => {
@@ -23,7 +25,7 @@ export function CreateTvDialog() {
                     name: String(formData.get("name")),
                     location: String(formData.get("location") || ""),
                   });
-                  toast.success("TV criada. Compartilhe o código com o dispositivo.");
+                  toast.success("TV criada.");
                   setOpen(false);
                 } catch (e) {
                   toast.error(e instanceof Error ? e.message : "Erro ao criar TV");
@@ -42,17 +44,19 @@ export function CreateTvDialog() {
   );
 }
 
-export function PairTvDialog() {
-  const [open, setOpen] = useState(false);
+export function PairTvDialog({ initialCode }: { initialCode?: string }) {
+  const [open, setOpen] = useState(Boolean(initialCode));
+  const [codeFromQr, setCodeFromQr] = useState(initialCode ?? null);
   const [pending, start] = useTransition();
+  const router = useRouter();
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="w-full border border-zinc-700 px-4 py-2.5 rounded-xl text-sm font-medium sm:w-auto">
+      <button onClick={() => { setCodeFromQr(null); setOpen(true); }} className="w-full border border-zinc-700 px-4 py-2.5 rounded-xl text-sm font-medium sm:w-auto">
         Conectar dispositivo
       </button>
       {open && (
-        <Modal onClose={() => setOpen(false)} title="Conectar dispositivo pareado">
+        <Modal onClose={() => { if (!pending) setOpen(false); }} title="Conectar dispositivo">
           <form
             action={(formData) => {
               start(async () => {
@@ -64,6 +68,7 @@ export function PairTvDialog() {
                   );
                   toast.success("Dispositivo conectado.");
                   setOpen(false);
+                  router.replace("/tvs");
                 } catch (e) {
                   toast.error(e instanceof Error ? e.message : "Erro ao parear");
                 }
@@ -71,7 +76,20 @@ export function PairTvDialog() {
             }}
             className="space-y-3"
           >
-            <Field label="Código exibido no dispositivo" name="code" required placeholder="A7K9-21QF" />
+            {codeFromQr && (
+              <p className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2.5 text-sm text-cyan-200">
+                Código recebido pelo QR Code. Dê um nome à TV para concluir.
+              </p>
+            )}
+            <Field
+              key={codeFromQr ?? "manual-code"}
+              label="Código exibido no dispositivo"
+              name="code"
+              required
+              placeholder="A7K9-23QF"
+              defaultValue={codeFromQr ?? undefined}
+              readOnly={Boolean(codeFromQr)}
+            />
             <Field label="Nome da TV" name="name" required />
             <Field label="Local" name="location" />
             <SubmitButton pending={pending} label="Conectar" />
@@ -94,9 +112,10 @@ export function AssignPlaylistSelect({
   const [pending, start] = useTransition();
   return (
     <select
-      defaultValue={currentPlaylistId ?? ""}
+      aria-label="Playlist padrão da TV"
+      value={currentPlaylistId ?? ""}
       disabled={pending}
-      onChange={(e) => start(() => setTvPlaylist(tvId, e.target.value || null))}
+      onChange={(e) => { const value = e.target.value || null; start(async () => { try { await setTvPlaylist(tvId, value); toast.success("Playlist padrão atualizada."); } catch { toast.error("Não foi possível vincular a playlist."); } }); }}
       className="w-full min-w-0 bg-zinc-900 border border-zinc-700 rounded-md text-sm px-2 py-2.5 sm:w-auto"
     >
       <option value="">Sem playlist</option>
@@ -115,7 +134,7 @@ export function DeleteTvButton({ id }: { id: string }) {
     <button
       disabled={pending}
       onClick={() => {
-        if (confirm("Excluir esta TV?")) start(() => deleteTv(id));
+        if (confirm("Excluir esta TV?")) start(async () => { try { await deleteTv(id); toast.success("TV excluída."); } catch { toast.error("Não foi possível excluir a TV."); } });
       }}
       className="text-red-400 text-sm hover:underline"
     >
@@ -124,29 +143,41 @@ export function DeleteTvButton({ id }: { id: string }) {
   );
 }
 
-function Modal({ children, onClose, title }: { children: React.ReactNode; onClose: () => void; title: string }) {
-  return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="mx-3 w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6"
-      >
-        <h2 className="text-lg font-semibold mb-4">{title}</h2>
-        {children}
-      </div>
-    </div>
-  );
+export function RevokeTvButton({ id }: { id: string }) {
+  const [pending, start] = useTransition();
+  return <button disabled={pending} className="mr-3 text-sm text-amber-300 hover:underline" onClick={() => {
+    if (confirm("Revogar o acesso desta TV? Ela precisará ser conectada novamente como um novo dispositivo. Este cadastro e sua programação serão mantidos.")) {
+      start(async () => { try { await revokeTvAccess(id); toast.success("Acesso revogado."); } catch { toast.error("Não foi possível revogar o acesso."); } });
+    }
+  }}>{pending ? "Revogando…" : "Revogar acesso"}</button>;
 }
 
-function Field({ label, name, required, placeholder }: { label: string; name: string; required?: boolean; placeholder?: string }) {
+function Field({
+  label,
+  name,
+  required,
+  placeholder,
+  defaultValue,
+  readOnly,
+}: {
+  label: string;
+  name: string;
+  required?: boolean;
+  placeholder?: string;
+  defaultValue?: string;
+  readOnly?: boolean;
+}) {
   return (
     <div>
-      <label className="text-sm text-zinc-400 block mb-1">{label}</label>
+      <label htmlFor={name} className="text-sm text-zinc-400 block mb-1">{label}</label>
       <input
+        id={name}
         name={name}
         required={required}
         placeholder={placeholder}
-        className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm"
+        defaultValue={defaultValue}
+        readOnly={readOnly}
+        className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm read-only:cursor-default read-only:text-zinc-400"
       />
     </div>
   );

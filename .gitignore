@@ -1,8 +1,9 @@
 node_modules
 .next
-drizzle
 *.log
 
 .vercel
 .env*
 !.env.example
+
+*.tsbuildinfo
