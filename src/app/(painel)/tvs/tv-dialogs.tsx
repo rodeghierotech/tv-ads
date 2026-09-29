@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createTv, deleteTv, pairTvByCode, setTvPlaylist, revokeTvAccess } from "@/actions/tv";
 import { toast } from "sonner";
 import { Modal } from "@/app/modal";
+import { QrCodeScanner } from "./qr-code-scanner";
 
 export function CreateTvDialog() {
   const [open, setOpen] = useState(false);
@@ -46,17 +47,24 @@ export function CreateTvDialog() {
 
 export function PairTvDialog({ initialCode }: { initialCode?: string }) {
   const [open, setOpen] = useState(Boolean(initialCode));
-  const [codeFromQr, setCodeFromQr] = useState(initialCode ?? null);
+  const [code, setCode] = useState(initialCode ?? "");
+  const [codeFromQr, setCodeFromQr] = useState(Boolean(initialCode));
+  const [scanning, setScanning] = useState(false);
   const [pending, start] = useTransition();
   const router = useRouter();
+  const handleScan = useCallback((scannedCode: string) => {
+    setCode(scannedCode);
+    setCodeFromQr(true);
+    setScanning(false);
+  }, []);
 
   return (
     <>
-      <button onClick={() => { setCodeFromQr(null); setOpen(true); }} className="w-full border border-zinc-700 px-4 py-2.5 rounded-xl text-sm font-medium sm:w-auto">
+      <button onClick={() => { setCode(""); setCodeFromQr(false); setScanning(false); setOpen(true); }} className="w-full border border-zinc-700 px-4 py-2.5 rounded-xl text-sm font-medium sm:w-auto">
         Conectar dispositivo
       </button>
       {open && (
-        <Modal onClose={() => { if (!pending) setOpen(false); }} title="Conectar dispositivo">
+        <Modal onClose={() => { if (!pending) { setScanning(false); setOpen(false); } }} title="Conectar dispositivo">
           <form
             action={(formData) => {
               start(async () => {
@@ -76,19 +84,28 @@ export function PairTvDialog({ initialCode }: { initialCode?: string }) {
             }}
             className="space-y-3"
           >
+            {!scanning && (
+              <button
+                type="button"
+                onClick={() => setScanning(true)}
+                className="w-full rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-3 text-sm font-medium text-cyan-200 sm:hidden"
+              >
+                Escanear QR Code
+              </button>
+            )}
+            {scanning && <QrCodeScanner onScan={handleScan} onCancel={() => setScanning(false)} />}
             {codeFromQr && (
               <p className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2.5 text-sm text-cyan-200">
                 Código recebido pelo QR Code. Dê um nome à TV para concluir.
               </p>
             )}
             <Field
-              key={codeFromQr ?? "manual-code"}
               label="Código exibido no dispositivo"
               name="code"
               required
               placeholder="A7K9-23QF"
-              defaultValue={codeFromQr ?? undefined}
-              readOnly={Boolean(codeFromQr)}
+              value={code}
+              onChange={(value) => { setCode(value); setCodeFromQr(false); }}
             />
             <Field label="Nome da TV" name="name" required />
             <Field label="Local" name="location" />
@@ -159,6 +176,8 @@ function Field({
   placeholder,
   defaultValue,
   readOnly,
+  value,
+  onChange,
 }: {
   label: string;
   name: string;
@@ -166,6 +185,8 @@ function Field({
   placeholder?: string;
   defaultValue?: string;
   readOnly?: boolean;
+  value?: string;
+  onChange?: (value: string) => void;
 }) {
   return (
     <div>
@@ -177,6 +198,8 @@ function Field({
         placeholder={placeholder}
         defaultValue={defaultValue}
         readOnly={readOnly}
+        value={value}
+        onChange={onChange ? (event) => onChange(event.target.value) : undefined}
         className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm read-only:cursor-default read-only:text-zinc-400"
       />
     </div>

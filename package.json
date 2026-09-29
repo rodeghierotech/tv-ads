@@ -20,6 +20,7 @@
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@next/env": "16.3.4",
+    "@zxing/browser": "^0.1.5",
     "better-auth": "^1.1.0",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.454.0",
